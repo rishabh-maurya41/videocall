@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSocket } from '../../hooks/useSocket';
 import { useWebRTC } from '../../hooks/useWebRTC';
@@ -16,17 +16,11 @@ export const VideoCall = ({ userId, userName, userType }) => {
   const [callDuration, setCallDuration] = useState(0);
   const [callStartTime, setCallStartTime] = useState(null);
   const [hasRemoteUser, setHasRemoteUser] = useState(false);
-
-  // Debug logging
-  console.log('VideoCall render:', {
-    userId,
-    userName,
-    userType,
-    roomId,
-    hasRemoteUser,
-    isConnected,
-    socketId: socket?.id
-  });
+  
+  // Use refs to capture current values for cleanup
+  const socketRef = useRef(socket);
+  const roomIdRef = useRef(roomId);
+  const userIdRef = useRef(userId);
 
   const {
     localStream,
@@ -49,6 +43,18 @@ export const VideoCall = ({ userId, userName, userType }) => {
     toggleScreenShare,
     cleanup
   } = useWebRTC(socket, roomId, userId, userType, userName);
+
+  // Debug logging
+  console.log('🔄 VideoCall render:', {
+    userId,
+    userName,
+    userType,
+    roomId,
+    hasRemoteUser,
+    isConnected,
+    socketId: socket?.id,
+    remoteUserInfo
+  });
 
   // Initialize media and join room
   useEffect(() => {
@@ -75,36 +81,46 @@ export const VideoCall = ({ userId, userName, userType }) => {
 
   // Socket event listeners
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      console.log('⚠️ No socket available');
+      return;
+    }
 
-    socket.on('room-users', (users) => {
-      console.log('📋 Current users in room:', users);
+    console.log('� Setting  up socket listeners for userId:', userId);
+
+    const handleRoomUsers = (users) => {
+      console.log('📋 room-users event received:', users);
       console.log('📋 My userId:', userId);
       console.log('📋 Users count:', users.length);
+      
       if (users.length > 1) {
-        console.log('✅ Multiple users detected, setting hasRemoteUser = true');
-        setHasRemoteUser(true);
+        console.log('✅ Multiple users detected!');
         const otherUser = users.find(u => u.userId !== userId);
         if (otherUser) {
           console.log('✅ Found other user:', otherUser);
           setRemoteUserInfo(otherUser);
+          setHasRemoteUser(true);
+          console.log('✅ hasRemoteUser set to TRUE');
         }
       } else {
         console.log('⏳ Only one user in room, waiting...');
+        setHasRemoteUser(false);
       }
-    });
+    };
 
-    socket.on('user-joined', ({ socketId, userId: joinedUserId, userType: joinedUserType, userName: joinedUserName }) => {
-      console.log('👤 User joined:', joinedUserName);
-      console.log('👤 Joined userId:', joinedUserId);
+    const handleUserJoined = ({ socketId, userId: joinedUserId, userType: joinedUserType, userName: joinedUserName }) => {
+      console.log('👤 user-joined event received');
+      console.log('👤 Joined user:', joinedUserName, 'userId:', joinedUserId);
       console.log('👤 My userId:', userId);
       console.log('👤 Are they different?', joinedUserId !== userId);
       
       if (joinedUserId !== userId) {
-        console.log('✅ Different user! Setting hasRemoteUser = true');
+        console.log('✅ Different user! Setting up connection...');
+        const newUserInfo = { socketId, userId: joinedUserId, userType: joinedUserType, userName: joinedUserName };
+        setRemoteUserInfo(newUserInfo);
         setHasRemoteUser(true);
-        setRemoteUserInfo({ socketId, userId: joinedUserId, userType: joinedUserType, userName: joinedUserName });
         setCallStartTime(new Date());
+        console.log('✅ hasRemoteUser set to TRUE');
         
         // Create offer for the new user
         setTimeout(() => {
@@ -114,42 +130,53 @@ export const VideoCall = ({ userId, userName, userType }) => {
       } else {
         console.log('⚠️ Same user, ignoring');
       }
-    });
-    socket.on('offer', async ({ offer, socketId }) => {
-      console.log('Received offer from:', socketId);
-      await handleOffer(offer, socketId);
-      setCallStartTime(new Date());
-    });
+    };
 
-    socket.on('answer', async ({ answer }) => {
-      console.log('Received answer');
-      await handleAnswer(answer);
-    });
-
-    socket.on('ice-candidate', async ({ candidate }) => {
-      await handleIceCandidate(candidate);
-    });
-
-    socket.on('user-left', ({ userName: leftUserName }) => {
-      console.log('User left:', leftUserName);
+    const handleUserLeft = ({ userName: leftUserName }) => {
+      console.log('👋 User left:', leftUserName);
       setHasRemoteUser(false);
       setRemoteUserInfo(null);
-    });
+      console.log('❌ hasRemoteUser set to FALSE');
+    };
 
-    socket.on('screen-share-toggle', ({ isSharing, userName: sharingUserName }) => {
-      console.log(`${sharingUserName} ${isSharing ? 'started' : 'stopped'} screen sharing`);
-    });
+    const handleScreenShareToggle = ({ isSharing, userName: sharingUserName }) => {
+      console.log(`📺 ${sharingUserName} ${isSharing ? 'started' : 'stopped'} screen sharing`);
+    };
+
+    const handleOfferReceived = async ({ offer, socketId }) => {
+      console.log('📞 Received offer from:', socketId);
+      await handleOffer(offer, socketId);
+      setCallStartTime(new Date());
+    };
+
+    const handleAnswerReceived = async ({ answer }) => {
+      console.log('� Recreived answer');
+      await handleAnswer(answer);
+    };
+
+    const handleIceCandidateReceived = async ({ candidate }) => {
+      await handleIceCandidate(candidate);
+    };
+
+    socket.on('room-users', handleRoomUsers);
+    socket.on('user-joined', handleUserJoined);
+    socket.on('offer', handleOfferReceived);
+    socket.on('answer', handleAnswerReceived);
+    socket.on('ice-candidate', handleIceCandidateReceived);
+    socket.on('user-left', handleUserLeft);
+    socket.on('screen-share-toggle', handleScreenShareToggle);
 
     return () => {
-      socket.off('room-users');
-      socket.off('user-joined');
-      socket.off('offer');
-      socket.off('answer');
-      socket.off('ice-candidate');
-      socket.off('user-left');
-      socket.off('screen-share-toggle');
+      console.log('🧹 Cleaning up socket listeners');
+      socket.off('room-users', handleRoomUsers);
+      socket.off('user-joined', handleUserJoined);
+      socket.off('offer', handleOfferReceived);
+      socket.off('answer', handleAnswerReceived);
+      socket.off('ice-candidate', handleIceCandidateReceived);
+      socket.off('user-left', handleUserLeft);
+      socket.off('screen-share-toggle', handleScreenShareToggle);
     };
-  }, [socket, userId, createOffer, handleOffer, handleAnswer, handleIceCandidate]);
+  }, [socket, userId, createOffer, handleOffer, handleAnswer, handleIceCandidate, setRemoteUserInfo, setCallStartTime]);
 
   // Call duration timer
   useEffect(() => {
@@ -163,15 +190,27 @@ export const VideoCall = ({ userId, userName, userType }) => {
     return () => clearInterval(interval);
   }, [callStartTime]);
 
-  // Cleanup on unmount
+  // Update refs when values change
+  useEffect(() => {
+    socketRef.current = socket;
+    roomIdRef.current = roomId;
+    userIdRef.current = userId;
+  }, [socket, roomId, userId]);
+
+  // Cleanup on unmount ONLY
   useEffect(() => {
     return () => {
-      if (socket) {
-        socket.emit('leave-call', { roomId, userId });
+      console.log('🚪 Component unmounting, leaving room');
+      if (socketRef.current) {
+        socketRef.current.emit('leave-call', { 
+          roomId: roomIdRef.current, 
+          userId: userIdRef.current 
+        });
       }
       cleanup();
     };
-  }, [socket, roomId, userId, cleanup]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty array - only run on unmount
 
   const handleEndCall = () => {
     if (socket) {

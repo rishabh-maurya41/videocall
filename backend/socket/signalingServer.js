@@ -9,15 +9,19 @@ const setupSignalingServer = (io) => {
     // Join room
     socket.on('join-room', async ({ roomId, userId, userType, userName }) => {
       try {
+        console.log(`📥 Join room request:`, { roomId, userId, userType, userName, socketId: socket.id });
+        
         socket.join(roomId);
         
         // Initialize room if doesn't exist
         if (!rooms.has(roomId)) {
+          console.log(`🆕 Creating new room: ${roomId}`);
           rooms.set(roomId, new Map());
         }
         
         // Store user info
         rooms.get(roomId).set(socket.id, { userId, userType, userName });
+        console.log(`✅ User stored in room. Room now has ${rooms.get(roomId).size} user(s)`);
         
         // Update meeting in database
         await Meeting.findOneAndUpdate(
@@ -36,6 +40,7 @@ const setupSignalingServer = (io) => {
 
         // Get all users in room
         const usersInRoom = Array.from(rooms.get(roomId).values());
+        console.log(`👥 Users in room ${roomId}:`, usersInRoom);
         
         // Notify others in room
         socket.to(roomId).emit('user-joined', {
@@ -45,11 +50,13 @@ const setupSignalingServer = (io) => {
           userName,
           usersInRoom
         });
+        console.log(`📢 Notified other users in room about new user`);
 
         // Send current users to the new joiner
         socket.emit('room-users', usersInRoom);
+        console.log(`📤 Sent room-users to ${userName}`);
 
-        console.log(`User ${userName} (${userType}) joined room: ${roomId}`);
+        console.log(`✅ User ${userName} (${userType}) joined room: ${roomId}`);
       } catch (error) {
         console.error('Join room error:', error);
         socket.emit('error', { message: 'Failed to join room' });
@@ -125,10 +132,14 @@ const setupSignalingServer = (io) => {
   // Helper function to handle user leaving
   async function handleUserLeave(socket, roomId, userId) {
     try {
-      if (!rooms.has(roomId)) return;
+      if (!rooms.has(roomId)) {
+        console.log(`Room ${roomId} not found, user may have already left`);
+        return;
+      }
 
-      const userInfo = rooms.get(roomId).get(socket.id);
-      rooms.get(roomId).delete(socket.id);
+      const room = rooms.get(roomId);
+      const userInfo = room.get(socket.id);
+      room.delete(socket.id);
 
       // Notify others
       socket.to(roomId).emit('user-left', {
@@ -149,7 +160,7 @@ const setupSignalingServer = (io) => {
       );
 
       // If room is empty, mark meeting as completed
-      if (rooms.get(roomId).size === 0) {
+      if (room.size === 0) {
         rooms.delete(roomId);
         await Meeting.findOneAndUpdate(
           { roomId },
@@ -159,6 +170,8 @@ const setupSignalingServer = (io) => {
           }
         );
         console.log(`Room ${roomId} is now empty and marked as completed`);
+      } else {
+        console.log(`Room ${roomId} still has ${room.size} user(s)`);
       }
 
       console.log(`User ${userId} left room: ${roomId}`);
