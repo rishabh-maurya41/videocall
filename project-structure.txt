@@ -1,0 +1,34 @@
+telehealth-video-call/
+├── backend/
+│   ├── config/
+│   │   └── db.js
+│   ├── models/
+│   │   └── Meeting.js
+│   ├── controllers/
+│   │   └── meetingController.js
+│   ├── routes/
+│   │   └── meetingRoutes.js
+│   ├── socket/
+│   │   └── signalingServer.js
+│   ├── server.js
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── VideoCall/
+│   │   │   │   ├── VideoCall.jsx
+│   │   │   │   ├── VideoControls.jsx
+│   │   │   │   ├── VideoStream.jsx
+│   │   │   │   ├── ChatPanel.jsx
+│   │   │   │   └── WaitingRoom.jsx
+│   │   │   └── ...
+│   │   ├── hooks/
+│   │   │   ├── useWebRTC.js
+│   │   │   └── useSocket.js
+│   │   ├── utils/
+│   │   │   └── webrtcConfig.js
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── package.json
+│   └── tailwind.config.js
+└── README.md
