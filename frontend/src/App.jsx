@@ -7,9 +7,15 @@ function VideoCallWrapper() {
   const [searchParams] = useSearchParams();
   
   // Get user info from URL parameters or generate random for testing
-  const userId = searchParams.get('userId') || `user-${Math.random().toString(36).substr(2, 9)}`;
+  const userId = searchParams.get('userId') || `user-${Math.random().toString(36).substring(2, 11)}`;
   const userName = searchParams.get('userName') || `User ${Math.floor(Math.random() * 1000)}`;
   const userType = searchParams.get('userType') || (Math.random() > 0.5 ? 'doctor' : 'patient');
+  
+  console.log('🎭 VideoCallWrapper - Generated user info:', {
+    userId,
+    userName,
+    userType
+  });
   
   return (
     <VideoCall 

@@ -17,6 +17,17 @@ export const VideoCall = ({ userId, userName, userType }) => {
   const [callStartTime, setCallStartTime] = useState(null);
   const [hasRemoteUser, setHasRemoteUser] = useState(false);
 
+  // Debug logging
+  console.log('VideoCall render:', {
+    userId,
+    userName,
+    userType,
+    roomId,
+    hasRemoteUser,
+    isConnected,
+    socketId: socket?.id
+  });
+
   const {
     localStream,
     remoteStream,
@@ -67,27 +78,41 @@ export const VideoCall = ({ userId, userName, userType }) => {
     if (!socket) return;
 
     socket.on('room-users', (users) => {
-      console.log('Current users in room:', users);
+      console.log('📋 Current users in room:', users);
+      console.log('📋 My userId:', userId);
+      console.log('📋 Users count:', users.length);
       if (users.length > 1) {
+        console.log('✅ Multiple users detected, setting hasRemoteUser = true');
         setHasRemoteUser(true);
         const otherUser = users.find(u => u.userId !== userId);
         if (otherUser) {
+          console.log('✅ Found other user:', otherUser);
           setRemoteUserInfo(otherUser);
         }
+      } else {
+        console.log('⏳ Only one user in room, waiting...');
       }
     });
 
     socket.on('user-joined', ({ socketId, userId: joinedUserId, userType: joinedUserType, userName: joinedUserName }) => {
-      console.log('User joined:', joinedUserName);
+      console.log('👤 User joined:', joinedUserName);
+      console.log('👤 Joined userId:', joinedUserId);
+      console.log('👤 My userId:', userId);
+      console.log('👤 Are they different?', joinedUserId !== userId);
+      
       if (joinedUserId !== userId) {
+        console.log('✅ Different user! Setting hasRemoteUser = true');
         setHasRemoteUser(true);
         setRemoteUserInfo({ socketId, userId: joinedUserId, userType: joinedUserType, userName: joinedUserName });
         setCallStartTime(new Date());
         
         // Create offer for the new user
         setTimeout(() => {
+          console.log('📞 Creating offer for:', socketId);
           createOffer(socketId);
         }, 1000);
+      } else {
+        console.log('⚠️ Same user, ignoring');
       }
     });
     socket.on('offer', async ({ offer, socketId }) => {
